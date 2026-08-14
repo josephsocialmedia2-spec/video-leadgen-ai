@@ -16,12 +16,17 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
+      - name: Install FFmpeg and FFprobe
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          ffmpeg -version | head -n 1
+          ffprobe -version | head -n 1
       - name: Prepare Sofia image
         run: |
           mkdir -p work
           base64 -d assets/sofia_avatar.b64 > work/sofia.jpg
           file work/sofia.jpg
-          ffmpeg -version | head -n 1
       - name: Python 3.10
         uses: actions/setup-python@v5
         with:
