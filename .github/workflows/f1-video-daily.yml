@@ -1,0 +1,43 @@
+name: F1 Video AI Daily
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 05:30 UTC = 07:30 in Italy during summer, 06:30 during winter.
+    - cron: '30 5 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  generate-and-email:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg fonts-dejavu-core
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Cache Piper voice
+        uses: actions/cache@v4
+        with:
+          path: models
+          key: piper-it-paola-medium-v1
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+      - name: Generate max 3 videos and email them
+        env:
+          PLAN_CSV_URL: ${{ secrets.PLAN_CSV_URL }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          MAIL_FROM: agenzia.realmediapro@gmail.com
+          MAIL_TO: agenzia.realmediapro@gmail.com
+          MAX_VIDEOS: '3'
+        run: python src/main.py
+      - name: Remove working files
+        if: always()
+        run: rm -rf work/* || true
