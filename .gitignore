@@ -1,0 +1,5 @@
+work/
+models/
+*.wav
+*.mp4
+__pycache__/
