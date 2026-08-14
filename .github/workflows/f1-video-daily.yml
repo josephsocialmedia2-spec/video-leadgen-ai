@@ -3,41 +3,113 @@ name: F1 Video AI Daily
 on:
   workflow_dispatch:
   schedule:
-    # 05:30 UTC = 07:30 in Italy during summer, 06:30 during winter.
+    # 05:30 UTC = 07:30 in Italia con ora legale.
     - cron: '30 5 * * *'
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: f1-video-ai-daily
+  cancel-in-progress: false
 
 jobs:
   generate-and-email:
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
+    runs-on: ubuntu-22.04
+    timeout-minutes: 330
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Install system packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-dejavu-core
-      - name: Setup Python
+          sudo apt-get install -y ffmpeg fonts-dejavu-core git wget unzip libsndfile1
+
+      - name: Setup Python 3.8
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      - name: Cache Piper voice
+          python-version: '3.8'
+
+      - name: Prepare Python tooling
+        run: |
+          python -m pip install --upgrade 'pip<24.1' wheel setuptools
+
+      - name: Install CPU PyTorch
+        run: |
+          pip install torch==1.13.1+cpu torchvision==0.14.1+cpu torchaudio==0.13.1 \
+            --extra-index-url https://download.pytorch.org/whl/cpu
+
+      - name: Clone SadTalker
+        run: |
+          git clone --depth 1 https://github.com/OpenTalker/SadTalker.git "$RUNNER_TEMP/SadTalker"
+
+      - name: Cache SadTalker models
+        id: sadtalker-cache
         uses: actions/cache@v4
         with:
-          path: models
-          key: piper-it-paola-medium-v1
-      - name: Install Python dependencies
+          path: |
+            ${{ runner.temp }}/SadTalker/checkpoints
+            ${{ runner.temp }}/SadTalker/gfpgan/weights
+          key: sadtalker-v002-models-v1
+
+      - name: Download SadTalker models
+        if: steps.sadtalker-cache.outputs.cache-hit != 'true'
+        working-directory: ${{ runner.temp }}/SadTalker
+        run: bash scripts/download_models.sh
+
+      - name: Install SadTalker dependencies
+        working-directory: ${{ runner.temp }}/SadTalker
         run: pip install -r requirements.txt
-      - name: Generate max 3 videos and email them
+
+      - name: Install F1 pipeline dependencies
+        run: pip install -r requirements.txt
+
+      - name: Validate required configuration
+        env:
+          PLAN_CSV_URL: ${{ secrets.PLAN_CSV_URL }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          AVATAR_01_URL: ${{ secrets.AVATAR_01_URL }}
+          AVATAR_02_URL: ${{ secrets.AVATAR_02_URL }}
+          AVATAR_03_URL: ${{ secrets.AVATAR_03_URL }}
+        run: |
+          test -n "$PLAN_CSV_URL" || (echo 'PLAN_CSV_URL mancante' && exit 1)
+          test -n "$GMAIL_APP_PASSWORD" || (echo 'GMAIL_APP_PASSWORD mancante' && exit 1)
+          test -n "$AVATAR_01_URL" || (echo 'AVATAR_01_URL mancante' && exit 1)
+          test -n "$AVATAR_02_URL" || (echo 'AVATAR_02_URL mancante' && exit 1)
+          test -n "$AVATAR_03_URL" || (echo 'AVATAR_03_URL mancante' && exit 1)
+
+      - name: Generate max 3 real-avatar videos and email them
         env:
           PLAN_CSV_URL: ${{ secrets.PLAN_CSV_URL }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           MAIL_FROM: agenzia.realmediapro@gmail.com
           MAIL_TO: agenzia.realmediapro@gmail.com
           MAX_VIDEOS: '3'
+          SADTALKER_DIR: ${{ runner.temp }}/SadTalker
+          AVATAR_01_URL: ${{ secrets.AVATAR_01_URL }}
+          AVATAR_02_URL: ${{ secrets.AVATAR_02_URL }}
+          AVATAR_03_URL: ${{ secrets.AVATAR_03_URL }}
+          VOICE_01: ${{ vars.VOICE_01 }}
+          VOICE_02: ${{ vars.VOICE_02 }}
+          VOICE_03: ${{ vars.VOICE_03 }}
+          STATUS_WEBHOOK_URL: ${{ secrets.STATUS_WEBHOOK_URL }}
         run: python src/main.py
-      - name: Remove working files
+
+      - name: Persist processed video IDs only
+        if: success()
+        run: |
+          if [[ -n "$(git status --porcelain state/processed.json)" ]]; then
+            git config user.name "f1-video-ai-bot"
+            git config user.email "actions@users.noreply.github.com"
+            git add state/processed.json
+            git commit -m "record processed F1 videos"
+            git push
+          fi
+
+      - name: Remove all temporary media
         if: always()
-        run: rm -rf work/* || true
+        run: rm -rf work/* "$RUNNER_TEMP/SadTalker/results" || true
