@@ -22,8 +22,6 @@ jobs:
           base64 -d assets/sofia_avatar.b64 > work/sofia.jpg
           file work/sofia.jpg
           ffmpeg -version | head -n 1
-          git --version
-          wget --version | head -n 1
       - name: Python 3.10
         uses: actions/setup-python@v5
         with:
@@ -34,7 +32,7 @@ jobs:
           pip install edge-tts
       - name: Create natural Italian speech
         run: |
-          edge-tts --voice it-IT-IsabellaNeural --rate='+2%' --text "Stai pensando di vendere casa? Il valore giusto non nasce da una stima a caso. Serve conoscere il mercato, la zona e come presentare l'immobile. F1 Immobiliare costruisce una strategia prima di pubblicare l'annuncio." --write-media work/voice.mp3
+          edge-tts --voice it-IT-IsabellaNeural --rate='+2%' --text "Ciao, sono Sofia, operatrice digitale di F1 Immobiliare." --write-media work/voice.mp3
       - name: Install SadTalker
         run: |
           git clone --depth 1 https://github.com/OpenTalker/SadTalker.git work/SadTalker
@@ -53,12 +51,10 @@ jobs:
           python inference.py --driven_audio ../voice.mp3 --source_image ../sofia.jpg --result_dir ../output --preprocess crop --size 256 --cpu 2>&1 | tee ../sadtalker-error.log
           CODE=${PIPESTATUS[0]}
           cd ../..
-          if [ "$CODE" -ne 0 ]; then
-            exit "$CODE"
-          fi
+          if [ "$CODE" -ne 0 ]; then exit "$CODE"; fi
           FILE=$(find work/output -maxdepth 1 -name '*.mp4' | head -n 1)
           test -n "$FILE"
-          ffmpeg -y -i "$FILE" -vf "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black" -c:v libx264 -preset veryfast -crf 25 -c:a aac -b:a 128k -t 30 F1_SOFIA_TEST.mp4
+          ffmpeg -y -i "$FILE" -vf "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black" -c:v libx264 -preset veryfast -crf 25 -c:a aac -b:a 128k -t 10 F1_SOFIA_TEST.mp4
       - name: Upload SadTalker debug log
         if: always()
         uses: actions/upload-artifact@v4
