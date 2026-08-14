@@ -1,2 +1,2 @@
-2026-08-14T15:34:00+02:00
-Render F1 Sofia real avatar test - optimized run 3.
+2026-08-14T15:39:00+02:00
+Render F1 Sofia with validated JPEG source - run 4.
