@@ -21,10 +21,9 @@ jobs:
           mkdir -p work
           base64 -d assets/sofia_avatar.b64 > work/sofia.jpg
           file work/sofia.jpg
-      - name: System packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg git wget
+          ffmpeg -version | head -n 1
+          git --version
+          wget --version | head -n 1
       - name: Python 3.10
         uses: actions/setup-python@v5
         with:
