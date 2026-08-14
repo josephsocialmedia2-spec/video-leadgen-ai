@@ -46,15 +46,30 @@ jobs:
           cd work/SadTalker
           bash scripts/download_models.sh
       - name: Render talking Sofia
+        shell: bash
         run: |
           mkdir -p work/output
+          set +e
           cd work/SadTalker
-          python inference.py --driven_audio ../voice.mp3 --source_image ../sofia.jpg --result_dir ../output --still --preprocess full --size 256 --cpu
+          python inference.py --driven_audio ../voice.mp3 --source_image ../sofia.jpg --result_dir ../output --preprocess crop --size 256 --cpu 2>&1 | tee ../sadtalker-error.log
+          CODE=${PIPESTATUS[0]}
           cd ../..
+          if [ "$CODE" -ne 0 ]; then
+            exit "$CODE"
+          fi
           FILE=$(find work/output -maxdepth 1 -name '*.mp4' | head -n 1)
           test -n "$FILE"
           ffmpeg -y -i "$FILE" -vf "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black" -c:v libx264 -preset veryfast -crf 25 -c:a aac -b:a 128k -t 30 F1_SOFIA_TEST.mp4
+      - name: Upload SadTalker debug log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sadtalker-debug
+          path: work/sadtalker-error.log
+          if-no-files-found: warn
+          retention-days: 1
       - name: Upload real MP4
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: F1_SOFIA_REAL_VIDEO
