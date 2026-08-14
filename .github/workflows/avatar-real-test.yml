@@ -1,0 +1,53 @@
+name: REAL AVATAR VIDEO TEST
+
+on:
+  push:
+    branches: [avatar-video-test-4]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: System packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg git wget
+      - name: Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install TTS and SadTalker
+        run: |
+          python -m pip install --upgrade pip
+          pip install edge-tts
+          git clone --depth 1 https://github.com/OpenTalker/SadTalker.git
+          pip install torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 --index-url https://download.pytorch.org/whl/cpu
+          pip install -r SadTalker/requirements.txt
+      - name: Download SadTalker models
+        run: |
+          cd SadTalker
+          bash scripts/download_models.sh
+      - name: Natural Italian voice
+        run: |
+          edge-tts --voice it-IT-IsabellaNeural --rate='+2%' --text "Stai pensando di vendere casa? Il valore giusto non nasce da una stima a caso. Serve conoscere il mercato, la zona e come presentare l'immobile. F1 Immobiliare costruisce una strategia prima di pubblicare l'annuncio." --write-media voice.mp3
+      - name: Render actual talking avatar
+        run: |
+          mkdir -p output
+          cd SadTalker
+          python inference.py --driven_audio ../voice.mp3 --source_image examples/source_image/full_body_1.png --result_dir ../output --still --preprocess full --size 256 --cpu
+          cd ..
+          FILE=$(find output -maxdepth 1 -name '*.mp4' | head -n 1)
+          test -n "$FILE"
+          ffmpeg -y -i "$FILE" -vf "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:black" -c:v libx264 -preset veryfast -crf 25 -c:a aac -b:a 128k -t 30 F1_AVATAR_TEST.mp4
+      - name: Upload MP4
+        uses: actions/upload-artifact@v4
+        with:
+          name: F1_REAL_AVATAR_TEST
+          path: F1_AVATAR_TEST.mp4
+          retention-days: 1
