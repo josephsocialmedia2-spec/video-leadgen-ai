@@ -1,0 +1,28 @@
+name: Validate F1 Video AI
+
+on:
+  push:
+    paths:
+      - 'src/**'
+      - 'requirements.txt'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+      - name: Compile Python
+        run: python -m py_compile src/main.py
+      - name: Check required files
+        run: |
+          test -f requirements.txt
+          test -f state/processed.json
+          test -f .github/workflows/f1-video-daily.yml
