@@ -82,13 +82,13 @@ jobs:
           test -n "$AVATAR_02_URL" || (echo 'AVATAR_02_URL mancante' && exit 1)
           test -n "$AVATAR_03_URL" || (echo 'AVATAR_03_URL mancante' && exit 1)
 
-      - name: Generate max 3 real-avatar videos and email them
+      - name: Generate max 1 real-avatar video and email it
         env:
           PLAN_CSV_URL: ${{ secrets.PLAN_CSV_URL }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           MAIL_FROM: agenzia.realmediapro@gmail.com
           MAIL_TO: agenzia.realmediapro@gmail.com
-          MAX_VIDEOS: '3'
+          MAX_VIDEOS: '1'
           SADTALKER_DIR: ${{ runner.temp }}/SadTalker
           AVATAR_01_URL: ${{ secrets.AVATAR_01_URL }}
           AVATAR_02_URL: ${{ secrets.AVATAR_02_URL }}
