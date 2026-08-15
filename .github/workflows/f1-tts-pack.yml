@@ -1,0 +1,37 @@
+name: F1 TTS PACK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'trigger-tts.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tts:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Edge TTS
+        run: |
+          python -m pip install --upgrade pip
+          pip install edge-tts
+      - name: Generate three Italian voices
+        run: |
+          mkdir -p out
+          edge-tts --voice it-IT-IsabellaNeural --rate='+4%' --text "Se dovessi vendere casa domani, sapresti quanto vale davvero? Molti proprietari partono da un prezzo che hanno in mente, magari perché hanno visto annunci simili o perché conoscono quanto ha chiesto un vicino. Ma il valore di mercato dipende dal tuo immobile: zona, piano, condizioni, esposizione, pertinenze e domanda reale. Prima di decidere un prezzo, conviene capire come il mercato può leggere quella casa oggi. F1 Immobiliare ti offre una valutazione strategica gratuita, senza obbligo di mettere subito l'immobile in vendita." --write-media out/video1.mp3
+          edge-tts --voice it-IT-DiegoNeural --rate='+4%' --text "Il valore di casa tua non si calcola semplicemente facendo metri quadrati per prezzo medio. Due appartamenti della stessa metratura possono avere valori diversi per piano, ascensore, esposizione, stato interno, balconi, box e microzona. Per questo una valutazione seria parte dai dati, ma poi deve leggere le caratteristiche specifiche dell'immobile e la domanda presente sul mercato. Se vuoi una prima analisi del tuo caso, mandaci comune, zona e tipologia dell'immobile." --write-media out/video2.mp3
+          edge-tts --voice it-IT-IsabellaNeural --rate='+5%' --text "Vuoi sapere quanto potrebbe valere oggi la tua casa? Non devi necessariamente voler vendere subito. Conoscere il valore del tuo immobile può servirti per pianificare, confrontare alternative o semplicemente capire meglio il tuo patrimonio. F1 Immobiliare analizza le caratteristiche della casa e il mercato della zona per darti un'indicazione ragionata. La valutazione strategica è gratuita: scrivici VALORE in privato e indicaci comune e tipologia dell'immobile." --write-media out/video3.mp3
+      - name: Upload voice pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: F1_TTS_PACK
+          path: out/*.mp3
+          retention-days: 1
