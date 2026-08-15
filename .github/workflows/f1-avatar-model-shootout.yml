@@ -16,6 +16,8 @@ jobs:
         include:
           - model: longcat
             space: meituan-longcat/LongCat-Video-Avatar-1.5-Demo
+          - model: hunyuanvideo_avatar
+            space: rahul7star/Hunyuan-Avatar
           - model: infinitetalk
             space: marcelo1126/InfiniteTalk
           - model: omniavatar
