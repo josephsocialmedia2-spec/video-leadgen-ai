@@ -1,0 +1,2 @@
+2026-08-15T07:13+02:00
+Generate real moving avatar test from ARI reference frame.
