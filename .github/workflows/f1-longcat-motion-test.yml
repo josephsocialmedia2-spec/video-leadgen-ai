@@ -10,12 +10,33 @@ jobs:
   generate:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HUGGINGFACE_TOKEN: ${{ secrets.HUGGINGFACE_TOKEN }}
+      HUGGING_FACE_HUB_TOKEN: ${{ secrets.HUGGING_FACE_HUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      - name: Resolve Hugging Face authentication
+        run: |
+          TOKEN="${HF_TOKEN:-${HUGGINGFACE_TOKEN:-${HUGGING_FACE_HUB_TOKEN:-}}}"
+          if [ -z "$TOKEN" ]; then
+            echo "HF_AUTH_STATUS=missing" >> "$GITHUB_ENV"
+            echo "No Hugging Face token configured in GitHub Actions secrets."
+            exit 2
+          fi
+          echo "HF_AUTH_STATUS=available" >> "$GITHUB_ENV"
+          echo "HF_RUNTIME_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          echo "Hugging Face token available (value hidden)."
+
+      - name: Prepare virtual Sofia reference
+        run: |
+          base64 -d assets/sofia_avatar.b64 > sofia.jpg
+          file sofia.jpg
 
       - name: Install client and TTS
         run: |
@@ -28,23 +49,24 @@ jobs:
         run: |
           edge-tts --voice it-IT-IsabellaNeural --rate=+2% --text "Quanto vale davvero casa tua oggi? Il prezzo al metro quadro non basta." --write-media test_voice.mp3
 
-      - name: Call official Meituan LongCat Video Avatar 1.5 Demo
+      - name: Generate real moving virtual presenter
         run: |
           python - <<'PY'
           from gradio_client import Client, handle_file
           import shutil, os
-          client = Client('meituan-longcat/LongCat-Video-Avatar-1.5-Demo')
+          token = os.environ['HF_RUNTIME_TOKEN']
+          client = Client('victor/LongCat-Video-Avatar-1.5', hf_token=token)
           result = client.predict(
-              handle_file('assets/ari_ref.jpg'),
+              handle_file('sofia.jpg'),
               handle_file('test_voice.mp3'),
-              'A realistic Italian female real-estate consultant walks slowly forward through a bright modern apartment while speaking directly to a handheld smartphone camera. Natural full-body motion, subtle shoulder movement, realistic hand gestures, warm professional expression, direct eye contact, photorealistic vertical social-media reel, slight handheld smartphone feel.',
+              'A photorealistic Italian female real-estate consultant walks slowly through a bright modern apartment while speaking directly to a handheld smartphone camera. She turns her head and torso naturally, makes realistic professional hand gestures, maintains direct eye contact, and moves through the room like a real property consultant recording a social media Reel. Natural body motion, stable identity, realistic hands, slight handheld smartphone feel, no static talking head.',
               '480p',
               42,
               'Clean speech (fast)',
               'DBCache faster',
-              api_name='/generate_avatar'
+              api_name='/generate'
           )
-          print('RESULT:', result)
+          print('Generation returned a result.')
           path = result.get('video') if isinstance(result, dict) else result
           if isinstance(path, dict):
               path = path.get('path')
