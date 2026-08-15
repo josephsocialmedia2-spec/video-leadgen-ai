@@ -1,0 +1,130 @@
+name: F1 AVATAR MODEL SHOOTOUT
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'triggers/avatar-shootout.txt'
+
+jobs:
+  probe:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - model: longcat
+            space: meituan-longcat/LongCat-Video-Avatar-1.5-Demo
+          - model: infinitetalk
+            space: marcelo1126/InfiniteTalk
+          - model: omniavatar
+            space: alexnasa/OmniAvatar
+          - model: echomimicv2
+            space: fffiloni/echomimic-v2
+          - model: musetalk
+            space: tammylsantana/MuseTalk
+          - model: sadtalker
+            space: John6666/SadTalker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install probe tools
+        run: pip install -q gradio_client edge-tts requests
+      - name: Prepare common inputs
+        run: |
+          base64 -d assets/sofia_avatar.b64 > sofia.png
+          edge-tts --voice it-IT-IsabellaNeural --rate=+2% --text "Quanto vale davvero casa tua oggi? Prima di pubblicarla, analizziamo zona, condizioni e domanda reale." --write-media test.mp3
+          mkdir -p result
+      - name: Probe and generate
+        env:
+          MODEL: ${{ matrix.model }}
+          SPACE: ${{ matrix.space }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python - <<'PY'
+          import os, json, traceback, shutil, requests
+          from gradio_client import Client, handle_file
+
+          model=os.environ['MODEL']; space=os.environ['SPACE']; token=os.environ.get('HF_TOKEN') or None
+          outdir='result'; os.makedirs(outdir, exist_ok=True)
+          report={'model':model,'space':space,'status':'started'}
+
+          def save_result(x, path):
+              if isinstance(x, str):
+                  if x.startswith('http'):
+                      r=requests.get(x, timeout=300); r.raise_for_status(); open(path,'wb').write(r.content); return True
+                  if os.path.exists(x): shutil.copy2(x,path); return True
+              if isinstance(x, dict):
+                  for k in ('path','video','url','value'):
+                      if k in x:
+                          try:
+                              if save_result(x[k],path): return True
+                          except Exception: pass
+              if isinstance(x,(list,tuple)):
+                  for item in x:
+                      try:
+                          if save_result(item,path): return True
+                      except Exception: pass
+              return False
+
+          try:
+              c=Client(space, token=token)
+              api=c.view_api(return_format='dict')
+              open(f'{outdir}/{model}_api.json','w').write(json.dumps(api,indent=2,default=str))
+              endpoints=api.get('named_endpoints',{}) if isinstance(api,dict) else {}
+              candidates=[]
+              for ep, spec in endpoints.items():
+                  pars=spec.get('parameters',[]) or []
+                  names=[str(p.get('parameter_name','')).lower() for p in pars]
+                  score=sum(any(k in n for k in ('image','photo','source','avatar','reference')) for n in names)*3 + sum('audio' in n for n in names)*3
+                  if score>=6: candidates.append((score,ep,spec))
+              candidates.sort(reverse=True,key=lambda x:x[0])
+              report['candidate_endpoints']=[x[1] for x in candidates[:5]]
+              if not candidates:
+                  raise RuntimeError('No API endpoint with both image/avatar and audio inputs')
+              last=None
+              for _, ep, spec in candidates[:4]:
+                  try:
+                      kwargs={}
+                      for p in spec.get('parameters',[]) or []:
+                          n=str(p.get('parameter_name',''))
+                          nl=n.lower(); has_default=p.get('parameter_has_default',False)
+                          if any(k in nl for k in ('image','photo','source_image','ref_image','reference_image','avatar_image')):
+                              kwargs[n]=handle_file('sofia.png')
+                          elif 'audio' in nl:
+                              kwargs[n]=handle_file('test.mp3')
+                          elif 'prompt' in nl or ('text' in nl and not 'textbox' in nl):
+                              kwargs[n]='A realistic Italian real-estate consultant speaking naturally to camera, subtle hand and upper-body motion, bright modern apartment, stable identity, realistic body motion.'
+                          elif has_default:
+                              continue
+                          else:
+                              typ=str(p.get('python_type',{})).lower()
+                              if 'bool' in typ: kwargs[n]=False
+                              elif 'int' in typ: kwargs[n]=1
+                              elif 'float' in typ: kwargs[n]=1.0
+                              elif 'str' in typ: kwargs[n]=''
+                      report['attempt_endpoint']=ep
+                      report['attempt_keys']=list(kwargs)
+                      res=c.predict(api_name=ep, **kwargs)
+                      report['raw_result']=str(res)[:2000]
+                      if save_result(res, f'{outdir}/{model}.mp4'):
+                          report['status']='video_created'; break
+                      last=RuntimeError('Endpoint returned no downloadable file')
+                  except Exception as e:
+                      last=e; report.setdefault('errors',[]).append(f'{ep}: {type(e).__name__}: {e}')
+              if report.get('status')!='video_created':
+                  raise last or RuntimeError('No endpoint succeeded')
+          except Exception as e:
+              report['status']='failed'; report['error']=f'{type(e).__name__}: {e}'; report['traceback']=traceback.format_exc()[-6000:]
+          open(f'{outdir}/{model}_report.json','w').write(json.dumps(report,indent=2,ensure_ascii=False))
+          print(json.dumps(report,indent=2,ensure_ascii=False))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shootout-${{ matrix.model }}
+          path: result/
+          retention-days: 1
