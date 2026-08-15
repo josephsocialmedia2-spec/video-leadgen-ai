@@ -21,8 +21,8 @@ jobs:
           python-version: '3.11'
       - name: Install tools
         run: |
-          pip install -q gradio_client edge-tts
-          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+          pip install -q gradio_client edge-tts requests
+          command -v ffmpeg >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
       - name: Prepare Sofia
         run: base64 -d assets/sofia_avatar.b64 > sofia.png
       - name: Prepare script and voice
@@ -52,6 +52,10 @@ jobs:
               if isinstance(x, dict):
                   for k in ('path','video','url'):
                       if k in x: return save_any(x[k])
+              if isinstance(x, (list, tuple)):
+                  for item in x:
+                      try: return save_any(item)
+                      except Exception: pass
               raise RuntimeError(f'Unsupported result: {x!r}')
           save_any(result)
           PY
