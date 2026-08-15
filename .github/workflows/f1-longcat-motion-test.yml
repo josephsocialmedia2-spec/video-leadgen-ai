@@ -1,0 +1,65 @@
+name: F1 LONGCAT MOTION TEST
+
+on:
+  push:
+    paths:
+      - 'trigger-longcat.txt'
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install client and TTS
+        run: |
+          python -m pip install --upgrade pip
+          pip install gradio_client edge-tts
+          sudo apt-get update -y
+          sudo apt-get install -y ffmpeg
+
+      - name: Generate Italian driving audio
+        run: |
+          edge-tts --voice it-IT-IsabellaNeural --rate=+2% --text "Quanto vale davvero casa tua oggi? Il prezzo al metro quadro non basta." --write-media test_voice.mp3
+
+      - name: Call LongCat Video Avatar 1.5 ZeroGPU
+        run: |
+          python - <<'PY'
+          from gradio_client import Client, handle_file
+          import shutil, os
+          client = Client('victor/LongCat-Video-Avatar-1.5')
+          result = client.predict(
+              handle_file('assets/ari_ref.jpg'),
+              handle_file('test_voice.mp3'),
+              'A realistic Italian female real-estate consultant walks slowly forward through a bright modern apartment while speaking directly to a handheld smartphone camera. Natural body motion, subtle shoulder movement, realistic hand gestures, warm professional expression, maintaining eye contact, photorealistic, vertical social media reel style.',
+              '480p',
+              42,
+              'Clean speech (fast)',
+              'DBCache faster',
+              api_name='/generate'
+          )
+          print('RESULT:', result)
+          if isinstance(result, dict):
+              path = result.get('video') or result.get('path')
+          else:
+              path = result
+          if not path or not os.path.exists(path):
+              raise RuntimeError(f'No generated video file returned: {result!r}')
+          shutil.copy2(path, 'F1_LONGCAT_MOTION_TEST.mp4')
+          PY
+
+      - name: Probe output
+        run: |
+          ffprobe -v error -show_entries format=duration -show_entries stream=width,height,r_frame_rate -of default=nw=1 F1_LONGCAT_MOTION_TEST.mp4
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: F1_LONGCAT_MOTION_TEST
+          path: F1_LONGCAT_MOTION_TEST.mp4
+          retention-days: 1
