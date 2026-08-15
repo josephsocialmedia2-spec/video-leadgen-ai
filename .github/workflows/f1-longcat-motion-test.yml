@@ -34,14 +34,15 @@ jobs:
           from gradio_client import Client, handle_file
           import shutil, os
           client = Client('meituan-longcat/LongCat-Video-Avatar-1.5-Demo')
-          print(client.view_api())
           result = client.predict(
               handle_file('assets/ari_ref.jpg'),
               handle_file('test_voice.mp3'),
               'A realistic Italian female real-estate consultant walks slowly forward through a bright modern apartment while speaking directly to a handheld smartphone camera. Natural full-body motion, subtle shoulder movement, realistic hand gestures, warm professional expression, direct eye contact, photorealistic vertical social-media reel, slight handheld smartphone feel.',
               '480p',
               42,
-              api_name='/generate'
+              'Clean speech (fast)',
+              'DBCache faster',
+              api_name='/generate_avatar'
           )
           print('RESULT:', result)
           path = result.get('video') if isinstance(result, dict) else result
