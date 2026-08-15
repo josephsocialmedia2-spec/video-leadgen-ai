@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'trigger-wan3-segmented.txt'
+      - trigger-wan3-segmented.txt
 
 jobs:
   generate:
@@ -48,101 +48,108 @@ jobs:
         shell: bash
         run: |
           if [ "$VIDEO_NO" = "1" ]; then
-            S1="Se dovessi vendere casa domani, sapresti davvero quanto chiedere? Molti proprietari iniziano guardando gli annunci online e facendo una semplice media al metro quadrato. Ma quello è solo il punto di partenza.";
-            S2="Il prezzo pubblicato non è necessariamente il valore che il mercato riconoscerà. Zona, piano, esposizione, stato interno, terrazzi, box e ascensore possono cambiare sensibilmente il risultato finale.";
-            S3="Per questo prima di pubblicare una casa bisogna analizzare l'immobile, confrontarlo con il mercato della microzona e capire quale fascia di prezzo può renderlo competitivo senza svalutarlo.";
-            S4="F1 Immobiliare effettua una valutazione strategica gratuita. Non devi essere già deciso a vendere. Se vuoi una prima analisi, scrivi VALORE e indicaci comune, tipologia e metri quadrati.";
+            S1="Se dovessi vendere casa domani, sapresti davvero quanto chiedere? Molti proprietari iniziano guardando gli annunci online e facendo una semplice media al metro quadrato. Ma quello è solo il punto di partenza."
+            S2="Il prezzo pubblicato non è necessariamente il valore che il mercato riconoscerà. Zona, piano, esposizione, stato interno, terrazzi, box e ascensore possono cambiare sensibilmente il risultato finale."
+            S3="Per questo prima di pubblicare una casa bisogna analizzare l'immobile, confrontarlo con il mercato della microzona e capire quale fascia di prezzo può renderlo competitivo senza svalutarlo."
+            S4="F1 Immobiliare effettua una valutazione strategica gratuita. Non devi essere già deciso a vendere. Se vuoi una prima analisi, scrivi VALORE e indicaci comune, tipologia e metri quadrati."
           elif [ "$VIDEO_NO" = "2" ]; then
-            S1="L'errore più comune quando si decide il prezzo di una casa? Guardare tre annunci online e pensare che quello sia automaticamente il valore di mercato del proprio immobile.";
-            S2="Due case nello stesso comune, perfino nello stesso stabile, possono avere valori diversi. Cambiano piano, luminosità, esposizione, ascensore, garage, terrazzo, condizioni interne e qualità complessiva.";
-            S3="Un prezzo troppo alto può rallentare la vendita e portare a ribassi successivi. Un prezzo troppo basso, invece, può significare lasciare sul tavolo una parte del valore dell'immobile.";
-            S4="La strategia corretta parte da dati, comparabili utili e concorrenza reale. F1 Immobiliare può analizzare gratuitamente il tuo immobile. Scrivi VALUTAZIONE e indicaci via, comune e tipologia.";
+            S1="L'errore più comune quando si decide il prezzo di una casa? Guardare tre annunci online e pensare che quello sia automaticamente il valore di mercato del proprio immobile."
+            S2="Due case nello stesso comune, perfino nello stesso stabile, possono avere valori diversi. Cambiano piano, luminosità, esposizione, ascensore, garage, terrazzo, condizioni interne e qualità complessiva."
+            S3="Un prezzo troppo alto può rallentare la vendita e portare a ribassi successivi. Un prezzo troppo basso, invece, può significare lasciare sul tavolo una parte del valore dell'immobile."
+            S4="La strategia corretta parte da dati, comparabili utili e concorrenza reale. F1 Immobiliare può analizzare gratuitamente il tuo immobile. Scrivi VALUTAZIONE e indicaci via, comune e tipologia."
           else
-            S1="Mettere casa online non significa aver scelto il prezzo giusto. Prima di pubblicare un annuncio c'è una decisione che può condizionare tutto il percorso di vendita: il posizionamento.";
-            S2="Bisogna capire quali immobili simili sono già sul mercato, a chi potrebbe interessare la tua casa e quali caratteristiche aumentano davvero il valore percepito dagli acquirenti.";
-            S3="Solo dopo questi controlli ha senso definire una fascia di prezzo e costruire la comunicazione. Una valutazione seria non serve soltanto a ottenere un numero, ma a prendere una decisione.";
-            S4="Con F1 Immobiliare puoi richiedere una valutazione strategica gratuita, anche se oggi non vuoi ancora vendere. Scrivi VALORE e indicaci comune, metri quadrati, piano e condizioni dell'immobile.";
+            S1="Mettere casa online non significa aver scelto il prezzo giusto. Prima di pubblicare un annuncio c'è una decisione che può condizionare tutto il percorso di vendita: il posizionamento."
+            S2="Bisogna capire quali immobili simili sono già sul mercato, a chi potrebbe interessare la tua casa e quali caratteristiche aumentano davvero il valore percepito dagli acquirenti."
+            S3="Solo dopo questi controlli ha senso definire una fascia di prezzo e costruire la comunicazione. Una valutazione seria non serve soltanto a ottenere un numero, ma a prendere una decisione."
+            S4="Con F1 Immobiliare puoi richiedere una valutazione strategica gratuita, anche se oggi non vuoi ancora vendere. Scrivi VALORE e indicaci comune, metri quadrati, piano e condizioni dell'immobile."
           fi
           printf '%s' "$S1" > audio/s1.txt
           printf '%s' "$S2" > audio/s2.txt
           printf '%s' "$S3" > audio/s3.txt
           printf '%s' "$S4" > audio/s4.txt
-
           for i in 1 2 3 4; do
             edge-tts --voice it-IT-IsabellaNeural --rate=-8% --text "$(cat audio/s${i}.txt)" --write-media "audio/scene${i}_raw.mp3"
             DUR=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "audio/scene${i}_raw.mp3")
-            python - "$DUR" "$i" <<'PY'
-import sys, subprocess
-D=float(sys.argv[1]); i=sys.argv[2]
-src=f'audio/scene{i}_raw.mp3'; dst=f'audio/scene{i}.mp3'
-# S2V requires each audio segment below 20 s. Keep speech natural, but hard-cap at 18.8 s.
-if D > 18.8:
-    factor=D/18.8
-    subprocess.check_call(['ffmpeg','-y','-loglevel','error','-i',src,'-filter:a',f'atempo={factor:.5f}',dst])
-else:
-    subprocess.check_call(['ffmpeg','-y','-loglevel','error','-i',src,'-c:a','libmp3lame','-q:a','2',dst])
-PY
+            FACTOR=$(python -c "d=float('$DUR'); print(d/18.8 if d>18.8 else 1.0)")
+            if python -c "import sys; sys.exit(0 if float('$FACTOR')>1.0001 else 1)"; then
+              ffmpeg -y -loglevel error -i "audio/scene${i}_raw.mp3" -filter:a "atempo=${FACTOR}" "audio/scene${i}.mp3"
+            else
+              cp "audio/scene${i}_raw.mp3" "audio/scene${i}.mp3"
+            fi
             ffprobe -v error -show_entries format=duration -of default=nw=1 "audio/scene${i}.mp3"
           done
 
-      - name: Generate four moving talking scenes
+      - name: Write remote generator
         run: |
-          python - <<'PY'
-from gradio_client import Client, handle_file
-import os, requests, shutil, time
+          cat > /tmp/generate.py <<'PY'
+          from gradio_client import Client, handle_file
+          import os, requests, shutil, time
 
-primary=os.environ['PRIMARY_SPACE']; fallback=os.environ['FALLBACK_SPACE']
-spaces=[primary, fallback]
+          spaces = [os.environ['PRIMARY_SPACE'], os.environ['FALLBACK_SPACE']]
 
-def save_result(x, out):
-    if isinstance(x, str) and x.startswith('http'):
-        r=requests.get(x, timeout=300); r.raise_for_status(); open(out,'wb').write(r.content); return True
-    if isinstance(x, str) and os.path.exists(x): shutil.copy2(x,out); return True
-    if isinstance(x, dict):
-        for k in ('path','video','url'):
-            if k in x and save_result(x[k],out): return True
-    if isinstance(x, (list,tuple)):
-        for item in x:
-            try:
-                if save_result(item,out): return True
-            except Exception: pass
-    return False
+          def save_result(x, out):
+              if isinstance(x, str) and x.startswith('http'):
+                  r = requests.get(x, timeout=300)
+                  r.raise_for_status()
+                  with open(out, 'wb') as f:
+                      f.write(r.content)
+                  return True
+              if isinstance(x, str) and os.path.exists(x):
+                  shutil.copy2(x, out)
+                  return True
+              if isinstance(x, dict):
+                  for k in ('path', 'video', 'url'):
+                      if k in x and save_result(x[k], out):
+                          return True
+              if isinstance(x, (list, tuple)):
+                  for item in x:
+                      try:
+                          if save_result(item, out):
+                              return True
+                      except Exception:
+                          pass
+              return False
 
-for scene in range(1,5):
-    out=f'clips/scene{scene}.mp4'
-    errors=[]
-    for space in spaces:
-        try:
-            print(f'SCENE {scene}: trying {space}', flush=True)
-            c=Client(space)
-            # cloned Wan S2V Spaces expose the same 3-input predict endpoint
-            result=c.predict(handle_file('sofia.png'), handle_file(f'audio/scene{scene}.mp3'), '480P', api_name='/predict')
-            print(f'SCENE {scene} RESULT: {result}', flush=True)
-            if save_result(result,out):
-                break
-            errors.append(f'{space}: unsupported result {result!r}')
-        except Exception as e:
-            errors.append(f'{space}: {type(e).__name__}: {e}')
-            print(errors[-1], flush=True)
-            time.sleep(3)
-    if not os.path.exists(out):
-        raise RuntimeError(' | '.join(errors))
-PY
+          for scene in range(1, 5):
+              out = f'clips/scene{scene}.mp4'
+              errors = []
+              for space in spaces:
+                  try:
+                      print(f'SCENE {scene}: trying {space}', flush=True)
+                      client = Client(space)
+                      result = client.predict(
+                          handle_file('sofia.png'),
+                          handle_file(f'audio/scene{scene}.mp3'),
+                          '480P',
+                          api_name='/predict'
+                      )
+                      print(f'SCENE {scene} RESULT: {result}', flush=True)
+                      if save_result(result, out):
+                          break
+                      errors.append(f'{space}: unsupported result {result!r}')
+                  except Exception as exc:
+                      msg = f'{space}: {type(exc).__name__}: {exc}'
+                      print(msg, flush=True)
+                      errors.append(msg)
+                      time.sleep(3)
+              if not os.path.exists(out):
+                  raise RuntimeError(' | '.join(errors))
+          PY
+
+      - name: Generate four moving talking scenes
+        run: python /tmp/generate.py
 
       - name: Normalize and concatenate to one Reel
         shell: bash
         run: |
           for i in 1 2 3 4; do
-            ffmpeg -y -loglevel error -i "clips/scene${i}.mp4" \
-              -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=25,format=yuv420p" \
-              -c:v libx264 -preset veryfast -crf 20 -c:a aac -b:a 160k -ar 48000 -ac 2 \
-              "finalclips/scene${i}.mp4"
+            ffmpeg -y -loglevel error -i "clips/scene${i}.mp4" -vf "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=25,format=yuv420p" -c:v libx264 -preset veryfast -crf 20 -c:a aac -b:a 160k -ar 48000 -ac 2 "finalclips/scene${i}.mp4"
           done
           printf "file 'scene1.mp4'\nfile 'scene2.mp4'\nfile 'scene3.mp4'\nfile 'scene4.mp4'\n" > finalclips/list.txt
-          (cd finalclips && ffmpeg -y -loglevel error -f concat -safe 0 -i list.txt -c copy joined.mp4)
-          ffmpeg -y -loglevel error -i finalclips/joined.mp4 -t 60 \
-            -c:v libx264 -preset veryfast -crf 20 -c:a aac -b:a 160k -movflags +faststart \
-            "F1_VALUTAZIONE_${VIDEO_NO}_60S.mp4"
+          cd finalclips
+          ffmpeg -y -loglevel error -f concat -safe 0 -i list.txt -c copy joined.mp4
+          cd ..
+          ffmpeg -y -loglevel error -i finalclips/joined.mp4 -t 60 -c:v libx264 -preset veryfast -crf 20 -c:a aac -b:a 160k -movflags +faststart "F1_VALUTAZIONE_${VIDEO_NO}_60S.mp4"
           ffprobe -v error -show_entries format=duration,size -show_entries stream=width,height,r_frame_rate -of default=nw=1 "F1_VALUTAZIONE_${VIDEO_NO}_60S.mp4"
 
       - uses: actions/upload-artifact@v4
