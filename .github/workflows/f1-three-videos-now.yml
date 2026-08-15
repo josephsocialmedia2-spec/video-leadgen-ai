@@ -1,0 +1,66 @@
+name: F1 THREE VIDEOS NOW
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'trigger-wan3.txt'
+
+jobs:
+  generate:
+    strategy:
+      fail-fast: false
+      matrix:
+        video: [1, 2, 3]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install tools
+        run: |
+          pip install -q gradio_client edge-tts
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Prepare Sofia
+        run: base64 -d assets/sofia_avatar.b64 > sofia.png
+      - name: Prepare script and voice
+        shell: bash
+        run: |
+          if [ "${{ matrix.video }}" = "1" ]; then
+            TEXT="Se dovessi vendere casa domani, sapresti davvero quanto chiedere? Molti proprietari iniziano guardando gli annunci online e facendo una media al metro quadrato. Ma quello che vedi pubblicato è un prezzo richiesto, non necessariamente il valore che il mercato riconoscerà. Zona, piano, esposizione, stato dell'immobile, terrazzi, box, ascensore e domanda reale possono cambiare molto il risultato. Per questo, prima di pubblicare una casa, bisogna analizzare l'immobile, confrontarlo con il mercato della microzona e capire come posizionarlo. F1 Immobiliare effettua una valutazione strategica gratuita. Non devi essere già deciso a vendere. Puoi semplicemente conoscere il valore attuale del tuo patrimonio. Se vuoi una prima analisi, scrivi VALORE e indicaci comune, tipologia e metri quadrati.";
+          elif [ "${{ matrix.video }}" = "2" ]; then
+            TEXT="L'errore più comune quando si decide il prezzo di una casa? Guardare tre annunci online e pensare che quello sia il valore di mercato. Due immobili nello stesso comune, perfino nello stesso stabile, possono avere valori diversi. Cambiano il piano, la luce, l'esposizione, la presenza dell'ascensore, il garage, il terrazzo, le condizioni interne e soprattutto il tipo di domanda presente in quel momento. Un prezzo troppo alto può rallentare la vendita e portare a ribassi successivi. Un prezzo troppo basso può invece far perdere valore al proprietario. La strategia corretta parte dai dati, dai comparabili utili e dalla concorrenza reale. F1 Immobiliare può analizzare gratuitamente il tuo immobile. Scrivici VALUTAZIONE e indicaci via, comune e tipologia della casa.";
+          else
+            TEXT="Mettere casa online non significa aver scelto il prezzo giusto. Prima di pubblicare un annuncio c'è una decisione che può condizionare tutto il percorso di vendita: il posizionamento dell'immobile. Bisogna capire quali case simili sono già sul mercato, a chi potrebbe interessare la tua, quali caratteristiche aumentano il valore percepito e quali invece possono limitarlo. Solo dopo ha senso definire una fascia di prezzo e costruire la comunicazione. Una valutazione seria non serve soltanto a ottenere un numero: serve a prendere una decisione con dati concreti. Con F1 Immobiliare puoi richiedere una valutazione strategica gratuita, anche se oggi non vuoi ancora vendere. Se vuoi sapere quanto potrebbe valere la tua casa, scrivi VALORE in privato e indicaci comune, metri quadrati, piano e condizioni dell'immobile.";
+          fi
+          edge-tts --voice it-IT-IsabellaNeural --rate=-4% --text "$TEXT" --write-media voice.mp3
+          ffprobe -v error -show_entries format=duration -of default=nw=1 voice.mp3
+      - name: Generate video with Wan2.2 S2V
+        run: |
+          python - <<'PY'
+          from gradio_client import Client, handle_file
+          import os, shutil, requests
+          client = Client('Wan-AI/Wan2.2-S2V')
+          result = client.predict(handle_file('sofia.png'), handle_file('voice.mp3'), '480P', api_name='/predict')
+          print('RESULT', result)
+          def save_any(x):
+              if isinstance(x, str) and x.startswith('http'):
+                  r=requests.get(x, timeout=240); r.raise_for_status(); open('raw.mp4','wb').write(r.content); return
+              if isinstance(x, str) and os.path.exists(x): shutil.copy2(x,'raw.mp4'); return
+              if isinstance(x, dict):
+                  for k in ('path','video','url'):
+                      if k in x: return save_any(x[k])
+              raise RuntimeError(f'Unsupported result: {x!r}')
+          save_any(result)
+          PY
+      - name: Final vertical MP4
+        run: |
+          ffmpeg -y -i raw.mp4 -vf "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2" -c:v libx264 -preset veryfast -crf 20 -c:a aac -b:a 160k -movflags +faststart "F1_VALUTAZIONE_${{ matrix.video }}.mp4"
+          ffprobe -v error -show_entries format=duration,size -of default=nw=1 "F1_VALUTAZIONE_${{ matrix.video }}.mp4"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: F1_VALUTAZIONE_${{ matrix.video }}
+          path: F1_VALUTAZIONE_${{ matrix.video }}.mp4
+          retention-days: 1
